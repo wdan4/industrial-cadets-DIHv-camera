@@ -46,7 +46,7 @@ cd ~ && python3 -m http.server 8181
 
 1. Connect to **PiStream** WiFi (password: Collegiate)
 1. Open Safari or Chrome
-1. Go to: `http://192.168.10.1:8181/vr_viewer.html`
+1. Go to: `http://<Pi_IP>:8181/vr_viewer.html`
 1. Tap the screen to go fullscreen
 
 -----
@@ -54,7 +54,7 @@ cd ~ && python3 -m http.server 8181
 ## Stream URL (direct WebRTC)
 
 ```
-http://192.168.10.1:8889/cam
+http://<Pi_IP>:8889/cam
 ```
 
 -----
@@ -63,13 +63,13 @@ http://192.168.10.1:8889/cam
 
 |Item                |Value                                  |
 |--------------------|---------------------------------------|
-|Pi hotspot IP       |192.168.10.1                           |
+|Pi hotspot IP       |<Pi_IP>                           |
 |WiFi name           |PiStream                               |
 |Webcam device       |/dev/video1                            |
 |mediamtx WebRTC port|8889                                   |
 |mediamtx RTSP port  |8554                                   |
 |Web server port     |8181                                   |
-|VR viewer URL       |http://192.168.10.1:8181/vr_viewer.html|
+|VR viewer URL       |http://<Pi_IP>:8181/vr_viewer.html|
 
 -----
 
@@ -94,7 +94,7 @@ ls /dev/video*
 v4l2-ctl --list-devices
 ```
 
-**mediamtx won’t start (port conflict):**
+**mediamtx won't start (port conflict):**
 
 ```bash
 sudo fuser -k 8889/tcp
