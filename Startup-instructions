@@ -1,0 +1,94 @@
+# Pi VR Stream — Startup Guide
+
+## Every Boot (run in terminal)
+
+### 1. Start NetworkManager (if not auto-started)
+
+```bash
+sudo systemctl start NetworkManager
+```
+
+### 2. Start mediamtx
+
+```bash
+cd ~ && ./mediamtx &
+```
+
+### 3a. Start streaming (with webcam connected)
+
+```bash
+ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/video1 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 2M -f rtsp rtsp://localhost:8554/cam
+```
+
+### 3b. Start streaming (test pattern, no webcam)
+
+```bash
+ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libx264 -preset ultrafast -tune zerolatency -f rtsp rtsp://localhost:8554/cam
+```
+
+### 4. Start web server (for VR viewer page)
+
+```bash
+cd ~ && python3 -m http.server 8181
+```
+
+-----
+
+## On Your Phone
+
+1. Connect to **PiStream** WiFi (password: Collegiate)
+1. Open Safari or Chrome
+1. Go to: `http://192.168.10.1:8181/vr_viewer.html`
+1. Tap the screen to go fullscreen
+
+-----
+
+## Stream URL (direct WebRTC)
+
+```
+http://192.168.10.1:8889/cam
+```
+
+-----
+
+## Key Info
+
+|Item                |Value                                  |
+|--------------------|---------------------------------------|
+|Pi hotspot IP       |192.168.10.1                           |
+|WiFi name           |PiStream                               |
+|Webcam device       |/dev/video1                            |
+|mediamtx WebRTC port|8889                                   |
+|mediamtx RTSP port  |8554                                   |
+|Web server port     |8181                                   |
+|VR viewer URL       |http://192.168.10.1:8181/vr_viewer.html|
+
+-----
+
+## Troubleshooting
+
+**Hotspot not showing up on phone:**
+
+```bash
+sudo nmcli con up hotspot
+```
+
+**Port 8888 conflict (pigpiod):**
+
+```bash
+sudo fuser -k 8888/tcp
+```
+
+**Check webcam is detected:**
+
+```bash
+ls /dev/video*
+v4l2-ctl --list-devices
+```
+
+**mediamtx won’t start (port conflict):**
+
+```bash
+sudo fuser -k 8889/tcp
+./mediamtx
+```
