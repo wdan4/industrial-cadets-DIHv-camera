@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>VR Stream</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+  }
+
+  #container {
+    display: flex;
+    flex-direction: row;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .eye {
+    flex: 1;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+  }
+
+  /* Thin divider line in the center */
+  .eye.left {
+    border-right: 1px solid #222;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    color: #333;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    gap: 14px;
+    transition: opacity 0.5s ease;
+  }
+
+  .placeholder.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pulse-ring {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #2a2a2a;
+    border-radius: 50%;
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.4); opacity: 0.7; }
+  }
+
+  .status-text {
+    color: #2a2a2a;
+    font-size: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="container">
+  <div class="eye left" id="eyeLeft">
+    <video id="videoLeft" autoplay playsinline muted></video>
+    <div class="placeholder" id="placeholderLeft">
+      <div class="pulse-ring"></div>
+      <span class="status-text">awaiting camera</span>
+    </div>
+  </div>
+  <div class="eye right" id="eyeRight">
+    <video id="videoRight" autoplay playsinline muted></video>
+    <div class="placeholder" id="placeholderRight">
+      <div class="pulse-ring"></div>
+      <span class="status-text">awaiting camera</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Configuration
+  const STREAM_URL = 'http://192.168.10.1:8889/cam';
+  const RETRY_INTERVAL = 3000; // ms between reconnect attempts
+
+  let pc1 = null;
+  let pc2 = null;
+  let retryTimer = null;
+
+  function showPlaceholder(show) {
+    document.getElementById('placeholderLeft').classList.toggle('hidden', !show);
+    document.getElementById('placeholderRight').classList.toggle('hidden', !show);
+  }
+
+  async function createPeerConnection(videoEl) {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+
+    pc.ontrack = (evt) => {
+      if (evt.streams && evt.streams[0]) {
+        videoEl.srcObject = evt.streams[0];
+      }
+    };
+
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Wait for ICE gathering
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') { resolve(); return; }
+      pc.onicegatheringstatechange = () => {
+        if (pc.iceGatheringState === 'complete') resolve();
+      };
+      setTimeout(resolve, 2000); // fallback timeout
+    });
+
+    const resp = await fetch(STREAM_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/sdp' },
+      body: pc.localDescription.sdp
+    });
+
+    if (!resp.ok) throw new Error('SDP exchange failed: ' + resp.status);
+
+    const sdp = await resp.text();
+    await pc.setRemoteDescription({ type: 'answer', sdp });
+
+    return pc;
+  }
+
+  async function connect() {
+    try {
+      // Clean up old connections
+      if (pc1) { pc1.close(); pc1 = null; }
+      if (pc2) { pc2.close(); pc2 = null; }
+
+      const v1 = document.getElementById('videoLeft');
+      const v2 = document.getElementById('videoRight');
+
+      // Connect both eyes simultaneously
+      [pc1, pc2] = await Promise.all([
+        createPeerConnection(v1),
+        createPeerConnection(v2)
+      ]);
+
+      showPlaceholder(false);
+
+      // Monitor for disconnection
+      pc1.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc1.connectionState)) {
+          showPlaceholder(true);
+          scheduleRetry();
+        }
+      };
+
+    } catch (err) {
+      console.log('Stream not available, retrying...', err.message);
+      showPlaceholder(true);
+      scheduleRetry();
+    }
+  }
+
+  function scheduleRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(connect, RETRY_INTERVAL);
+  }
+
+  // Lock to landscape and go fullscreen on tap
+  document.body.addEventListener('click', () => {
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  });
+
+  // Start
+  connect();
+</script>
+</body>
+</html>
