@@ -26,7 +26,15 @@ ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/vi
 ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libx264 -preset ultrafast -tune zerolatency -f rtsp rtsp://localhost:8554/cam
 ```
 
-### 4. Start web server (for VR viewer page)
+### 4. Find ip
+
+```bash
+ip addr show wlan0
+```
+
+-----
+
+### 5. Start web server (for VR viewer page)
 
 ```bash
 cd ~ && python3 -m http.server 8181
