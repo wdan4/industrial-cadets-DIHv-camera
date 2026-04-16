@@ -1,1 +1,13 @@
+[Unit]
+Description=VR Viewer Web Server
+After=network-online.target
 
+[Service]
+WorkingDirectory=/home/pi
+ExecStart=/usr/bin/python3 -m http.server 8181
+Restart=always
+RestartSec=2
+User=pi
+
+[Install]
+WantedBy=multi-user.target
