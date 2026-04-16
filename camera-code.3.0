@@ -1,1 +1,138 @@
+<!DOCTYPE html>
 
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>VR Stream</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #container { position: relative; width: 100vw; height: 100vh; background: #000; overflow: hidden; }
+  #sourceVideo { display: none; }
+  #canvasLeft, #canvasRight {
+    position: absolute; top: 0; width: 50%; height: 100%;
+  }
+  #canvasLeft  { left: 0; border-right: 1px solid #111; }
+  #canvasRight { right: 0; }
+  .placeholder {
+    position: absolute; top: 0; width: 50%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #000; color: #222; font-family: 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    gap: 14px; transition: opacity 0.5s ease; pointer-events: none;
+  }
+  #placeholderLeft  { left: 0; }
+  #placeholderRight { right: 0; }
+  .placeholder.hidden { opacity: 0; }
+  .pulse-ring {
+    width: 36px; height: 36px; border: 1px solid #222; border-radius: 50%;
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.5); opacity: 0.8; }
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <video id="sourceVideo" autoplay playsinline muted></video>
+  <canvas id="canvasLeft"></canvas>
+  <canvas id="canvasRight"></canvas>
+  <div class="placeholder" id="placeholderLeft">
+    <div class="pulse-ring"></div>
+    <span>awaiting camera</span>
+  </div>
+  <div class="placeholder" id="placeholderRight">
+    <div class="pulse-ring"></div>
+    <span>awaiting camera</span>
+  </div>
+</div>
+<script>
+  const STREAM_URL = 'http://192.168.10.1:8889/cam';
+  const RETRY_INTERVAL = 3000;
+  const video = document.getElementById('sourceVideo');
+  const canvasL = document.getElementById('canvasLeft');
+  const canvasR = document.getElementById('canvasRight');
+  const ctxL = canvasL.getContext('2d');
+  const ctxR = canvasR.getContext('2d');
+  let pc = null, retryTimer = null, animFrame = null, streaming = false;
+
+function showPlaceholders(show) {
+document.getElementById(‘placeholderLeft’).classList.toggle(‘hidden’, !show);
+document.getElementById(‘placeholderRight’).classList.toggle(‘hidden’, !show);
+}
+
+function resizeCanvases() {
+const w = window.innerWidth / 2, h = window.innerHeight;
+canvasL.width = w; canvasL.height = h;
+canvasR.width = w; canvasR.height = h;
+}
+
+function renderLoop() {
+if (streaming && video.readyState >= 2) {
+const vw = video.videoWidth, vh = video.videoHeight;
+if (vw > 0 && vh > 0) {
+const halfW = vw / 2;
+const cw = canvasL.width, ch = canvasL.height;
+const scale = ch / vh;
+const drawW = halfW * scale, drawH = vh * scale;
+const offsetX = (cw - drawW) / 2;
+ctxL.drawImage(video, 0, 0, halfW, vh, offsetX, 0, drawW, drawH);
+ctxR.drawImage(video, halfW, 0, halfW, vh, offsetX, 0, drawW, drawH);
+}
+}
+animFrame = requestAnimationFrame(renderLoop);
+}
+
+async function connect() {
+try {
+if (pc) { pc.close(); pc = null; }
+pc = new RTCPeerConnection({ iceServers: [{ urls: ‘stun:stun.l.google.com:19302’ }] });
+pc.ontrack = (evt) => {
+if (evt.streams && evt.streams[0]) {
+video.srcObject = evt.streams[0];
+streaming = true;
+showPlaceholders(false);
+}
+};
+pc.onconnectionstatechange = () => {
+if ([‘failed’,‘disconnected’,‘closed’].includes(pc.connectionState)) {
+streaming = false; showPlaceholders(true); scheduleRetry();
+}
+};
+pc.addTransceiver(‘video’, { direction: ‘recvonly’ });
+pc.addTransceiver(‘audio’, { direction: ‘recvonly’ });
+const offer = await pc.createOffer();
+await pc.setLocalDescription(offer);
+await new Promise(resolve => {
+if (pc.iceGatheringState === ‘complete’) { resolve(); return; }
+pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === ‘complete’) resolve(); };
+setTimeout(resolve, 2000);
+});
+const resp = await fetch(STREAM_URL, {
+method: ‘POST’, headers: { ‘Content-Type’: ‘application/sdp’ }, body: pc.localDescription.sdp
+});
+if (!resp.ok) throw new Error(’SDP failed: ’ + resp.status);
+await pc.setRemoteDescription({ type: ‘answer’, sdp: await resp.text() });
+} catch (err) {
+streaming = false; showPlaceholders(true); scheduleRetry();
+}
+}
+
+function scheduleRetry() { clearTimeout(retryTimer); retryTimer = setTimeout(connect, RETRY_INTERVAL); }
+
+document.body.addEventListener(‘click’, () => {
+if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+if (screen.orientation && screen.orientation.lock) screen.orientation.lock(‘landscape’).catch(()=>{});
+});
+
+window.addEventListener(‘resize’, resizeCanvases);
+resizeCanvases();
+renderLoop();
+connect();
+</script>
+
+</body>
+</html>
