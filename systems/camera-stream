@@ -1,0 +1,13 @@
+[Unit]
+Description=Camera RTSP Stream (FFmpeg)
+After=mediamtx.service
+Requires=mediamtx.service
+
+[Service]
+ExecStart=/bin/bash -c 'ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x480 -i /dev/video0 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 2M -f rtsp rtsp://localhost:8554/cam'
+Restart=always
+RestartSec=2
+User=pi
+
+[Install]
+WantedBy=multi-user.target
