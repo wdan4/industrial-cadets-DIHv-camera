@@ -17,7 +17,7 @@ cd ~ && ./mediamtx &
 ### 3a. Start streaming (with webcam connected)
 
 ```bash
-ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/video1 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 2M -f rtsp rtsp://localhost:8554/cam
+ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x480 -i /dev/video0 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 2M -f rtsp rtsp://localhost:8554/cam
 ```
 
 ### 3b. Start streaming (test pattern, no webcam)
